@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Molecular & Atomic Geometry Studio</title>
+  <style>
+    :root {
+      --bg-dark: #050508;
+      --panel-bg: rgba(16, 18, 27, 0.85);
+      --border-glow: rgba(0, 229, 255, 0.25);
+      --accent: #00e5ff;
+      --text-main: #f0f4f8;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    /* Control Panel (Top Left) */
+    .ui-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 310px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      z-index: 10;
+    }
+
+    .ui-panel h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      background: #121521;
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 0.88rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--accent);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* PowerPoint Bevel Inspector Card (Bottom Right) */
+    .inspector-card {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .inspector-card h2 {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .inspector-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.83rem;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .inspector-row span:first-child {
+      color: var(--text-muted);
+    }
+
+    .inspector-row span:last-child {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    /* Floating 3D Labels */
+    #labels-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .floating-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 12, 18, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: opacity 0.15s ease;
+    }
+
+    .angle-label {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0, 20, 30, 0.9);
+      font-size: 0.82rem;
+    }
+  </style>
+
+  <!-- Load Three.js and OrbitControls via ES Module Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="canvas-container">
+    <div id="labels-container"></div>
+
+    <!-- Top-Left Controls -->
+    <div class="ui-panel">
+      <h1>3D Molecular & Atomic Studio</h1>
+
+      <div class="control-group">
+        <label for="model-select">Select 3D Geometry</label>
+        <select id="model-select">
+          <option value="ch4">Tetrahedral — Methane (CH₄)</option>
+          <option value="bf3">Trigonal Planar — Boron Trifluoride (BF₃)</option>
+          <option value="h2o">Bent + Lone Pairs — Water (H₂O)</option>
+          <option value="pcl5">Trigonal Bipyramidal — PCl₅</option>
+          <option value="sf6">Octahedral — Sulfur Hexafluoride (SF₆)</option>
+          <option value="atom">3D Atomic Orbitals — Carbon (Z = 6)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>
+          <span>Bond Length / Explosion</span>
+          <span id="bond-length-val">2.2x</span>
+        </label>
+        <input type="range" id="bond-slider" min="1.5" max="3.5" step="0.05" value="2.2" />
+      </div>
+
+      <div class="toggle-row">
+        <span>Auto-Rotate (Turntable)</span>
+        <input type="checkbox" id="toggle-rotate" checked />
+      </div>
+
+      <div class="toggle-row">
+        <span>Show Bond Angles & Labels</span>
+        <input type="checkbox" id="toggle-labels" checked />
+      </div>
+    </div>
+
+    <!-- Bottom-Right PowerPoint Reference Inspector -->
+    <div class="inspector-card">
+      <h2>PowerPoint 3D Bevel Guide</h2>
+      <div class="inspector-row">
+        <span>Selected Element:</span>
+        <span id="info-name">Central Carbon (C)</span>
+      </div>
+      <div class="inspector-row">
+        <span>Geometry / Angle:</span>
+        <span id="info-angle">109.5°</span>
+      </div>
+      <div class="inspector-row">
+        <span>Recommended Slide Size:</span>
+        <span id="info-size">2.00 in × 2.00 in</span>
+      </div>
+      <div class="inspector-row">
+        <span>Circle Bevel (Width & Height):</span>
+        <span id="info-bevel">72 pt × 72 pt</span>
+      </div>
+      <div class="inspector-row">
+        <span>3D Coordinates (X, Y, Z):</span>
+        <span id="info-coords">(0.00, 0.00, 0.00)</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- 1. SCENE, CAMERA, AND RENDERER SETUP ---
+    const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050508);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 2.2, 7.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.8;
+
+    // --- 2. THREE-POINT STUDIO LIGHTING (MATCHING POWERPOINT) ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(6, 8, 6);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x88ccff, 1.0);
+    fillLight.position.set(-6, -4, 4);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.PointLight(0x00e5ff, 1.6, 20);
+    rimLight.position.set(0, 5, -6);
+    scene.add(rimLight);
+
+    // --- 3. MOLECULAR & ATOMIC DATA DEFINITIONS ---
+    const MODELS = {
+      ch4: {
+        title: 'Tetrahedral (109.5°)',
+        angleText: '109.5°',
+        angleIndices: [0, 1],
+        central: { label: 'C', name: 'Carbon (C)', color: 0x3a3f47, radius: 0.7, pptInches: 2.0 },
+        ligands: [
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.45, pptInches: 1.25, dir: [1, 1, 1] },
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.45, pptInches: 1.25, dir: [-1, -1, 1] },
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.45, pptInches: 1.25, dir: [-1, 1, -1] },
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.45, pptInches: 1.25, dir: [1, -1, -1] }
+        ]
+      },
+      bf3: {
+        title: 'Trigonal Planar (120°)',
+        angleText: '120.0°',
+        angleIndices: [0, 1],
+        central: { label: 'B', name: 'Boron (B)', color: 0xff80b5, radius: 0.65, pptInches: 1.85 },
+        ligands: [
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [0, 1, 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [Math.sin(2 * Math.PI / 3), Math.cos(2 * Math.PI / 3), 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [Math.sin(4 * Math.PI / 3), Math.cos(4 * Math.PI / 3), 0] }
+        ]
+      },
+      h2o: {
+        title: 'Bent + 2 Lone Pairs (104.5°)',
+        angleText: '104.5°',
+        angleIndices: [0, 1],
+        central: { label: 'O', name: 'Oxygen (O)', color: 0xef4444, radius: 0.68, pptInches: 1.95 },
+        ligands: [
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.44, pptInches: 1.2, dir: [Math.sin(52.25 * Math.PI / 180), -Math.cos(52.25 * Math.PI / 180), 0] },
+          { label: 'H', name: 'Hydrogen (H)', color: 0xffffff, radius: 0.44, pptInches: 1.2, dir: [-Math.sin(52.25 * Math.PI / 180), -Math.cos(52.25 * Math.PI / 180), 0] },
+          { label: 'LP', name: 'Lone Pair Orbital', color: 0x00e5ff, radius: 0.52, pptInches: 1.5, dir: [0, Math.cos(54.75 * Math.PI / 180), Math.sin(54.75 * Math.PI / 180)], isLonePair: true },
+          { label: 'LP', name: 'Lone Pair Orbital', color: 0x00e5ff, radius: 0.52, pptInches: 1.5, dir: [0, Math.cos(54.75 * Math.PI / 180), -Math.sin(54.75 * Math.PI / 180)], isLonePair: true }
+        ]
+      },
+      pcl5: {
+        title: 'Trigonal Bipyramidal (90° & 120°)',
+        angleText: '90° / 120°',
+        angleIndices: [0, 3],
+        central: { label: 'P', name: 'Phosphorus (P)', color: 0xff9f1c, radius: 0.75, pptInches: 2.1 },
+        ligands: [
+          { label: 'Cl', name: 'Equatorial Cl', color: 0x2ec4b6, radius: 0.55, pptInches: 1.55, dir: [1, 0, 0] },
+          { label: 'Cl', name: 'Equatorial Cl', color: 0x2ec4b6, radius: 0.55, pptInches: 1.55, dir: [Math.cos(2 * Math.PI / 3), 0, Math.sin(2 * Math.PI / 3)] },
+          { label: 'Cl', name: 'Equatorial Cl', color: 0x2ec4b6, radius: 0.55, pptInches: 1.55, dir: [Math.cos(4 * Math.PI / 3), 0, Math.sin(4 * Math.PI / 3)] },
+          { label: 'Cl', name: 'Axial Cl', color: 0x2ec4b6, radius: 0.55, pptInches: 1.55, dir: [0, 1, 0] },
+          { label: 'Cl', name: 'Axial Cl', color: 0x2ec4b6, radius: 0.55, pptInches: 1.55, dir: [0, -1, 0] }
+        ]
+      },
+      sf6: {
+        title: 'Octahedral (90°)',
+        angleText: '90.0°',
+        angleIndices: [0, 2],
+        central: { label: 'S', name: 'Sulfur (S)', color: 0xfacc15, radius: 0.75, pptInches: 2.1 },
+        ligands: [
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [1, 0, 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [-1, 0, 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [0, 1, 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [0, -1, 0] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [0, 0, 1] },
+          { label: 'F', name: 'Fluorine (F)', color: 0x4ade80, radius: 0.5, pptInches: 1.4, dir: [0, 0, -1] }
+        ]
+      },
+      atom: {
+        title: '3D Atomic Shells (6p⁺, 6n⁰, 6e⁻)',
+        angleText: '60° Orbital Tilt',
+        isAtomicOrbital: true
+      }
+    };
+
+    // --- 4. SCENE OBJECT HOLDERS ---
+    const rootGroup = new THREE.Group();
+    scene.add(rootGroup);
+
+    let clickableMeshes = [];
+    let labelItems = [];
+    let orbitingElectrons = [];
+    let currentModelKey = 'ch4';
+    let bondScale = 2.2;
+    let showLabels = true;
+
+    // --- 5. BUILDER FUNCTIONS ---
+    function clearScene() {
+      while (rootGroup.children.length > 0) {
+        const obj = rootGroup.children[0];
+        rootGroup.remove(obj);
+      }
+      clickableMeshes = [];
+      labelItems = [];
+      orbitingElectrons = [];
+      labelsContainer.innerHTML = '';
+    }
+
+    function createGlossyMaterial(colorHex, isTranslucent = false) {
+      return new THREE.MeshPhysicalMaterial({
+        color: colorHex,
+        roughness: isTranslucent ? 0.15 : 0.2,
+        metalness: 0.08,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.1,
+        transparent: isTranslucent,
+        opacity: isTranslucent ? 0.42 : 1.0
+      });
+    }
+
+    function createCylinderBond(startVec, endVec, isLonePair = false) {
+      const direction = new THREE.Vector3().subVectors(endVec, startVec);
+      const length = direction.length();
+      const geom = new THREE.CylinderGeometry(isLonePair ? 0.05 : 0.12, isLonePair ? 0.05 : 0.12, length, 24);
+      const mat = new THREE.MeshStandardMaterial({
+        color: isLonePair ? 0x00e5ff : 0x94a3b8,
+        roughness: 0.35,
+        metalness: 0.5,
+        transparent: isLonePair,
+        opacity: isLonePair ? 0.45 : 1.0
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.copy(startVec).add(endVec).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+      return mesh;
+    }
+
+    function createHTMLTag(text, positionVec, isAngle = false) {
+      const div = document.createElement('div');
+      div.className = isAngle ? 'floating-label angle-label' : 'floating-label';
+      div.textContent = text;
+      labelsContainer.appendChild(div);
+      labelItems.push({ element: div, position: positionVec.clone() });
+    }
+
+    function buildModel(modelKey, lengthScale) {
+      clearScene();
+      const data = MODELS[modelKey];
+
+      if (data.isAtomicOrbital) {
+        buildAtomicOrbitalModel(lengthScale);
+        return;
+      }
+
+      // 1. Central Atom
+      const centralGeom = new THREE.SphereGeometry(data.central.radius, 48, 48);
+      const centralMat = createGlossyMaterial(data.central.color);
+      const centralMesh = new THREE.Mesh(centralGeom, centralMat);
+      centralMesh.userData = {
+        name: data.central.name,
+        angle: data.title,
+        pptInches: data.central.pptInches,
+        coords: new THREE.Vector3(0, 0, 0)
+      };
+      rootGroup.add(centralMesh);
+      clickableMeshes.push(centralMesh);
+      createHTMLTag(data.central.label, new THREE.Vector3(0, data.central.radius + 0.25, 0));
+
+      // 2. Surrounding Ligands & Covalent Bonds
+      const ligandPositions = [];
+
+      data.ligands.forEach((lig) => {
+        const dirVec = new THREE.Vector3(...lig.dir).normalize();
+        const pos = dirVec.clone().multiplyScalar(lengthScale);
+        ligandPositions.push(pos);
+
+        // Bond cylinder
+        const bondMesh = createCylinderBond(new THREE.Vector3(0, 0, 0), pos, lig.isLonePair);
+        rootGroup.add(bondMesh);
+
+        // Atom or Lone-Pair Lobe Sphere
+        const sphereGeom = new THREE.SphereGeometry(lig.radius, 40, 40);
+        const sphereMat = createGlossyMaterial(lig.color, lig.isLonePair);
+        const sphereMesh = new THREE.Mesh(sphereGeom, sphereMat);
+        sphereMesh.position.copy(pos);
+
+        sphereMesh.userData = {
+          name: lig.name,
+          angle: data.title,
+          pptInches: lig.pptInches,
+          coords: pos
+        };
+
+        rootGroup.add(sphereMesh);
+        clickableMeshes.push(sphereMesh);
+        createHTMLTag(lig.label, pos.clone().add(new THREE.Vector3(0, lig.radius + 0.22, 0)));
+      });
+
+      // 3. Bond Angle 3D Arc Indicator
+      if (data.angleIndices && ligandPositions.length >= 2) {
+        const v1 = ligandPositions[data.angleIndices[0]].clone().normalize();
+        const v2 = ligandPositions[data.angleIndices[1]].clone().normalize();
+        const arcRadius = lengthScale * 0.55;
+        const arcPoints = [];
+        const steps = 32;
+
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const pt = new THREE.Vector3().lerpVectors(v1, v2, t).normalize().multiplyScalar(arcRadius);
+          arcPoints.push(pt);
+        }
+
+        const arcGeom = new THREE.BufferGeometry().setFromPoints(arcPoints);
+        const arcMat = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+        const arcLine = new THREE.Line(arcGeom, arcMat);
+        rootGroup.add(arcLine);
+
+        const midArc = new THREE.Vector3().lerpVectors(v1, v2, 0.5).normalize().multiplyScalar(arcRadius + 0.32);
+        createHTMLTag(data.angleText, midArc, true);
+      }
+
+      updateInspector(centralMesh.userData);
+    }
+
+    function buildAtomicOrbitalModel(scaleFactor) {
+      // 1. Clustered Nucleus (6 Protons in Red, 6 Neutrons in Gray)
+      const nucleonCount = 12;
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+      for (let i = 0; i < nucleonCount; i++) {
+        const y = 1 - (i / (nucleonCount - 1)) * 2;
+        const radius = Math.sqrt(1 - y * y);
+        const theta = goldenAngle * i;
+        const nPos = new THREE.Vector3(
+          Math.cos(theta) * radius,
+          y,
+          Math.sin(theta) * radius
+        ).multiplyScalar(0.28);
+
+        const isProton = i % 2 === 0;
+        const nucGeom = new THREE.SphereGeometry(0.22, 28, 28);
+        const nucMat = createGlossyMaterial(isProton ? 0xef4444 : 0x64748b);
+        const nucMesh = new THREE.Mesh(nucGeom, nucMat);
+        nucMesh.position.copy(nPos);
+        nucMesh.userData = {
+          name: isProton ? 'Proton (p⁺)' : 'Neutron (n⁰)',
+          angle: 'Central Nucleus Cluster',
+          pptInches: 0.5,
+          coords: nPos
+        };
+        rootGroup.add(nucMesh);
+        clickableMeshes.push(nucMesh);
+      }
+
+      createHTMLTag('Nucleus (6p⁺, 6n⁰)', new THREE.Vector3(0, 0.68, 0));
+
+      // 2. Three Intersecting 3D Torus Orbital Rings + 6 Orbiting Electrons
+      const ringRadius = scaleFactor * 1.15;
+      const ringTilts = [
+        new THREE.Euler(Math.PI / 3, 0, 0),
+        new THREE.Euler(Math.PI / 3, (2 * Math.PI) / 3, 0),
+        new THREE.Euler(Math.PI / 3, (4 * Math.PI) / 3, 0)
+      ];
+
+      ringTilts.forEach((euler, idx) => {
+        const ringGroup = new THREE.Group();
+        ringGroup.rotation.copy(euler);
+
+        const torusGeom = new THREE.TorusGeometry(ringRadius, 0.03, 16, 100);
+        const torusMat = new THREE.MeshStandardMaterial({
+          color: 0x00e5ff,
+          emissive: 0x0088aa,
+          emissiveIntensity: 0.6,
+          roughness: 0.2
+        });
+        const torusMesh = new THREE.Mesh(torusGeom, torusMat);
+        ringGroup.add(torusMesh);
+
+        // Place 2 electrons on each tilted ring
+        for (let e = 0; e < 2; e++) {
+          const elecGeom = new THREE.SphereGeometry(0.15, 24, 24);
+          const elecMat = new THREE.MeshStandardMaterial({
+            color: 0xfacc15,
+            emissive: 0xf59e0b,
+            emissiveIntensity: 0.9
+          });
+          const elecMesh = new THREE.Mesh(elecGeom, elecMat);
+          const startAngle = e * Math.PI + idx * 0.8;
+          elecMesh.userData = {
+            name: 'Orbiting Electron (e⁻)',
+            angle: 'Tilted 3D Shell (65° X, 30° Y)',
+            pptInches: 0.35,
+            coords: new THREE.Vector3(ringRadius, 0, 0)
+          };
+          ringGroup.add(elecMesh);
+          clickableMeshes.push(elecMesh);
+          orbitingElectrons.push({ mesh: elecMesh, radius: ringRadius, phase: startAngle });
+        }
+
+        rootGroup.add(ringGroup);
+      });
+
+      updateInspector({
+        name: 'Carbon Atom Nucleus & Shells',
+        angle: '65° X-Rot / 30° Y-Rot Rings',
+        pptInches: 0.5,
+        coords: new THREE.Vector3(0, 0, 0)
+      });
+    }
+
+    // --- 6. POWERPOINT INSPECTOR UPDATER (36-POINT BEVEL RULE) ---
+    function updateInspector(info) {
+      const bevelPt = Math.round(info.pptInches * 36);
+      document.getElementById('info-name').textContent = info.name;
+      document.getElementById('info-angle').textContent = info.angle;
+      document.getElementById('info-size').textContent = `${info.pptInches.toFixed(2)} in × ${info.pptInches.toFixed(2)} in`;
+      document.getElementById('info-bevel').textContent = `${bevelPt} pt × ${bevelPt} pt`;
+      document.getElementById('info-coords').textContent =
+        `(${info.coords.x.toFixed(2)}, ${info.coords.y.toFixed(2)}, ${info.coords.z.toFixed(2)})`;
+    }
+
+    // --- 7. RAYCASTING (CLICK ATOM TO INSPECT) ---
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    window.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('.ui-panel') || event.target.closest('.inspector-card')) return;
+
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObjects(clickableMeshes);
+
+      if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        updateInspector(hit.userData);
+      }
+    });
+
+    // --- 8. UI EVENT LISTENERS ---
+    document.getElementById('model-select').addEventListener('change', (e) => {
+      currentModelKey = e.target.value;
+      buildModel(currentModelKey, bondScale);
+    });
+
+    document.getElementById('bond-slider').addEventListener('input', (e) => {
+      bondScale = parseFloat(e.target.value);
+      document.getElementById('bond-length-val').textContent = `${bondScale.toFixed(2)}x`;
+      buildModel(currentModelKey, bondScale);
+    });
+
+    document.getElementById('toggle-rotate').addEventListener('change', (e) => {
+      controls.autoRotate = e.target.checked;
+    });
+
+    document.getElementById('toggle-labels').addEventListener('change', (e) => {
+      showLabels = e.target.checked;
+      labelsContainer.style.display = showLabels ? 'block' : 'none';
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- 9. ANIMATION & 2D LABEL PROJECTION LOOP ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // Animate orbiting electrons in the Atomic Orbital mode
+      orbitingElectrons.forEach((item) => {
+        const angle = elapsed * 2.2 + item.phase;
+        item.mesh.position.set(
+          Math.cos(angle) * item.radius,
+          Math.sin(angle) * item.radius,
+          0
+        );
+      });
+
+      controls.update();
+
+      // Project 3D positions to 2D screen coordinates for floating labels
+      if (showLabels) {
+        labelItems.forEach((item) => {
+          const worldPos = item.position.clone().applyMatrix4(rootGroup.matrixWorld);
+          worldPos.project(camera);
+
+          const x = (worldPos.x * 0.5 + 0.5) * window.innerWidth;
+          const y = (-(worldPos.y * 0.5) + 0.5) * window.innerHeight;
+
+          item.element.style.left = `${x}px`;
+          item.element.style.top = `${y}px`;
+          item.element.style.opacity = worldPos.z > 1 ? '0' : '1';
+        });
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Initialize default Tetrahedral Methane model
+    buildModel(currentModelKey, bondScale);
+    animate();
+  </script>
+</body>
+</html>
